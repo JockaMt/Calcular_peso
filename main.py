@@ -1,106 +1,186 @@
+import json
+from pathlib import Path
+import sys
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 import calculo
-from menu.calibration import Calibration
+from menu.script import Calibration
 
-choice = 0
+def get_base_path():
+    """Retorna o caminho base dependendo se está executando como script ou executável"""
+    if getattr(sys, 'frozen', False):
+        # Se estiver rodando como executável
+        return Path(sys.executable).parent
+    else:
+        # Se estiver rodando como script
+        return Path(__file__).parent
 
-def update_label():
-    global choice
-    try:
-        volume = entry.get().replace(",", ".")
-        valor = calculo.calculate(volume, choice)
-        label['text'] = f'Peso: {valor:.3f}g'
-    except ValueError:
-        return None
+BASE_PATH = get_base_path()
+CONFIG_PATH = BASE_PATH / "config.json"
 
-def change_choice(opt):
-    buttons = [au18, au16, prata750]
-    global choice
-    match opt:
-        case 0:
-            choice = 0
-        case 1:
-            choice = 1
-        case 2:
-            choice = 2
-        case 3:
-            choice = 3
+class MetalWeightCalculator:
+    def __init__(self, root):
+        self.root = root
+        self.choice = 0  # 0: Ouro 18k, 1: Ouro 14k, 2: Prata 925
+        self.setup_ui()
+        self.setup_menu()
+        self.ensure_config_file()
 
-    for i, j in enumerate(buttons):
-        if i != choice:
-            j.config(state=tk.NORMAL)
-        else:
-            j.config(state=tk.DISABLED)
+    def ensure_config_file(self):
+        """Cria o arquivo de configuração com valores padrão se não existir"""
+        if not CONFIG_PATH.exists():
+            default_config = {
+                "Ouro_18k": 15.5,
+                "Ouro_14k": 14.0,
+                "Prata_925": 10.5
+            }
+            with open(CONFIG_PATH, 'w') as f:
+                json.dump(default_config, f)
+        
+    def setup_ui(self):
+        """Configura a interface gráfica principal"""
+        self.root.title('Calculadora de Pesos de Metais')
+        self.root.resizable(False, False)
+        self.center_window(400, 200)
+        
+        # Frame principal
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(expand=True, fill='both', padx=10, pady=10)
+        
+        # Frame de entrada
+        self.setup_input_frame(main_frame)
+        
+        # Frame de botões de opção
+        self.setup_options_frame(main_frame)
+        
+        # Frame de resultado
+        self.setup_result_frame(main_frame)
+        
+    def setup_input_frame(self, parent):
+        """Configura o frame de entrada de dados"""
+        input_frame = ttk.Frame(parent)
+        
+        lbl_volume = ttk.Label(input_frame, text='Volume:')
+        lbl_volume.pack(side=tk.LEFT)
+        
+        self.entry_volume = ttk.Entry(input_frame)
+        self.entry_volume.pack(side=tk.LEFT, padx=5, expand=True, fill='x')
+        self.entry_volume.bind('<Return>', lambda e: self.update_result())  # Enter para calcular
+        
+        btn_calculate = ttk.Button(input_frame, text='Calcular', command=self.update_result)
+        btn_calculate.pack(side=tk.LEFT)
+        
+        input_frame.pack(fill='x', pady=(0, 10))
+        
+    def setup_options_frame(self, parent):
+        """Configura os botões de seleção de metal"""
+        options_frame = ttk.Frame(parent)
+        
+        self.metal_buttons = []
+        metals = [
+            ("Ouro 18k", 0),
+            ("Ouro 14k", 1),
+            ("Prata 925", 2)
+        ]
+        
+        for text, value in metals:
+            btn = ttk.Button(
+                options_frame, 
+                text=text,
+                command=lambda v=value: self.change_metal(v)
+            )
+            btn.pack(side=tk.LEFT, padx=2)
+            self.metal_buttons.append(btn)
+            
+        # Desativa o botão padrão (Ouro 18k)
+        self.metal_buttons[self.choice].config(state=tk.DISABLED)
+        
+        options_frame.pack(pady=5)
+        
+    def setup_result_frame(self, parent):
+        """Configura a área de exibição do resultado"""
+        result_frame = ttk.Frame(parent)
+        
+        self.lbl_result = ttk.Label(
+            result_frame, 
+            text='Peso: 0.000g', 
+            font=('TkDefaultFont', 10, 'bold')
+        )
+        self.lbl_result.pack(expand=True)
+        
+        result_frame.pack(fill='x', pady=10)
+        
+    def setup_menu(self):
+        """Configura o menu superior"""
+        menubar = tk.Menu(self.root)
+        
+        # Menu Configurações
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        settings_menu.add_command(
+            label='Calibrar cálculo...', 
+            command=self.open_settings
+        )
+        settings_menu.add_separator()
+        settings_menu.add_command(
+            label='Sair', 
+            command=self.on_closing
+        )
+        
+        menubar.add_cascade(label='Configurações', menu=settings_menu)
+        self.root.config(menu=menubar)
+        
+    def center_window(self, width, height):
+        """Centraliza a janela na tela"""
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
+        
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+        
+    def change_metal(self, option):
+        """Altera o tipo de metal selecionado"""
+        self.choice = option
+        for i, btn in enumerate(self.metal_buttons):
+            btn.config(state=tk.DISABLED if i == option else tk.NORMAL)
+        self.update_result()
+        
+    def update_result(self):
+        """Atualiza o resultado do cálculo"""
+        try:
+            volume = self.entry_volume.get().replace(",", ".")
+            if not volume:  # Se o campo estiver vazio
+                self.lbl_result.config(text='Peso: 0.000g')
+                return
+                
+            weight = calculo.calculate(float(volume), self.choice)
+            self.lbl_result.config(text=f'Peso: {weight:.3f}g')
+        except ValueError:
+            messagebox.showerror("Erro", "Por favor, insira um valor numérico válido.")
+            self.entry_volume.focus_set()
+            
+    def open_settings(self):
+        """Abre a janela de configurações"""
+        settings_window = tk.Toplevel(self.root)
+        settings_window.title("Configurações")
+        settings_window.geometry("300x200")
+        settings_window.grab_set()
+        
+        calibration = Calibration(settings_window)
+        calibration.pack(fill=tk.BOTH, expand=True)
+        
+    def on_closing(self):
+        """Lida com o fechamento da aplicação"""
+        if messagebox.askokcancel("Sair", "Deseja mesmo sair do programa?"):
+            self.root.destroy()
 
-app = tk.Tk()
 
+def main():
+    root = tk.Tk()
+    app = MetalWeightCalculator(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_closing)
+    root.mainloop()
 
-def get_wm_info(height_size, wight_size, h, w):
-    x = int((wight_size / 2) - (w / 2))
-    y = int((height_size / 2) - (h / 2))
-    return f'{w}x{h}+{x}+{y}'
-
-def settings(root):
-    setting = tk.Toplevel(root)
-    setting.geometry(get_wm_info(setting.winfo_screenheight(), setting.winfo_screenwidth(), 200, 300))
-    setting.grab_set()
-    calibration = Calibration(setting)
-    calibration.pack(fill=tk.BOTH, expand=True)
-
-# set the dimensions of the screen
-# and where it is placed
-
-
-ws = app.winfo_screenwidth() # width of the screen
-hs = app.winfo_screenheight()
-app.geometry(get_wm_info(hs, ws, 200, 400))
-
-app.resizable(False, False)
-app.title('Calcular pesos')
-frame = ttk.Frame(app)
-
-entry_frame = ttk.Frame(frame)
-text = ttk.Label(entry_frame, text='Volume:')
-text.pack(side=tk.LEFT)
-entry = ttk.Entry(entry_frame)
-entry.pack(padx=20, ipady=5, expand=True, fill='x', side=tk.LEFT)
-button = ttk.Button(entry_frame, text='Calcular', command=update_label)
-button.pack(side=tk.LEFT, expand=False, fill='y')
-entry.focus_set()
-entry_frame.pack(pady=5, padx=10, expand=False, fill='x')
-
-separator = ttk.Separator(frame, orient=tk.HORIZONTAL)
-separator.pack(fill=tk.X)
-
-options_buttons_frame = ttk.Frame(frame)
-
-au18 = ttk.Button(options_buttons_frame, text="Ouro 18k", state=tk.DISABLED, command=lambda: change_choice(0))
-au18.pack(side=tk.LEFT)
-
-au16 = ttk.Button(options_buttons_frame, text="Ouro 14k", command=lambda: change_choice(1))
-au16.pack(side=tk.LEFT)
-
-prata750 = ttk.Button(options_buttons_frame, text="Prata 925", command=lambda: change_choice(2))
-prata750.pack(side=tk.LEFT)
-options_buttons_frame.pack(padx=5, pady=5)
-
-separator = ttk.Separator(frame, orient=tk.HORIZONTAL)
-separator.pack(fill=tk.X)
-
-label_frame = ttk.Frame(frame)
-
-label = ttk.Label(label_frame, text='')
-label.pack()
-
-label_frame.pack(expand=True, fill='x')
-
-frame.pack(expand=True, fill='both')
-
-menu = tk.Menu(app)
-settings_menu = tk.Menu(menu, tearoff=0)
-settings_menu.add_command(label='Calibrar cálculo...', command=lambda: settings(app))
-menu.add_cascade(label='Settings', menu=settings_menu)
-
-app.config(menu=menu)
-app.mainloop()
+if __name__ == "__main__":
+    main()
