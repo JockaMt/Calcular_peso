@@ -1,0 +1,62 @@
+# Ambiente Virtual
+.venv/
+venv/
+env/
+
+# Arquivos de Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribuição/Empacotamento
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Ambiente
+.env
+.env.local
+
+# Cache de Cotação
+.gold_price_cache.json
+
+# Banco de dados temporário
+db/
+*.db
+*.sqlite
+
+# Arquivos Legados
+menu/
+calculo.py
+
+# Teste
+test_close.py
