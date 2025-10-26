@@ -14,7 +14,6 @@ def get_base_path():
 
 BASE_PATH = get_base_path()
 CONFIG_PATH = BASE_PATH / "config.json"
-GOLD_PRICE_CACHE_PATH = BASE_PATH / ".gold_price_cache.json"
 
 # ==================== METAIS ====================
 METALS = {
@@ -29,20 +28,9 @@ METAL_LABELS = {
     2: "Prata 925"
 }
 
-# ==================== COTAÇÃO DE OURO ====================
-DEFAULT_GOLD_PRICE_USD = 65.50  # USD por grama
-DEFAULT_GOLD_PRICE_BRL = 352.50  # BRL por grama
-
-GOLD_UPDATE_INTERVAL = 60  # segundos
-GOLD_THREAD_TIMEOUT = 5000  # millisegundos (5 segundos)
-
 # ==================== INTERFACE ====================
 WINDOW_WIDTH = 400
 WINDOW_HEIGHT = 200
-
-# ==================== API ====================
-EXCHANGE_RATE_API_URL = "https://open.er-api.com/v6/latest/USD"
-EXCHANGE_RATE_TIMEOUT = 5  # segundos
 
 # ==================== LOGGING ====================
 DEBUG = False

@@ -60,3 +60,33 @@ calculo.py
 
 # Teste
 test_close.py
+
+# DLLs e binários
+*.dll
+*.exe
+*.lib
+*.obj
+*.pdb
+
+# Instalação NSIS
+installer/
+installer/*.exe
+installer/*.nsi
+installer/*.log
+
+# Backup
+*.old
+*.orig
+
+# Pasta de cache customizada
+GoldCalculator/
+build_temp/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.spec
+.env
+.venv/

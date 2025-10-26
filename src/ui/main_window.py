@@ -6,9 +6,9 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QMessageBox
 )
 from PySide6.QtGui import QFont
-from src.config import WINDOW_WIDTH, WINDOW_HEIGHT, METAL_LABELS, GOLD_THREAD_TIMEOUT
+from src.config import WINDOW_WIDTH, WINDOW_HEIGHT, METAL_LABELS
 from src.core.calculator import Calculator
-from src.ui.threads.gold_price_thread import GoldPriceThread
+from src.core.gold_price_cache import GoldPriceCache
 from src.ui.dialogs.calibration import CalibrationDialog
 
 
@@ -19,11 +19,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.choice = 0  # 0: Ouro 18k, 1: Ouro 14k, 2: Prata 925
         self.metal_buttons = []
-        self.gold_price_thread = None
         self.calculator = Calculator()
+        self.gold_price_cache = GoldPriceCache()
         
         self.setup_ui()
-        self.start_gold_price_updater()
     
     def setup_ui(self):
         """Configura a interface gráfica principal"""
@@ -49,13 +48,14 @@ class MainWindow(QMainWindow):
         self._setup_result_section(main_layout)
 
         main_layout.addStretch()
+        
+        # Frame do preço do ouro (no fim)
+        self._setup_gold_price_section(main_layout)
+        
         central_widget.setLayout(main_layout)
 
         # Configura o menu
         self._setup_menu()
-        
-        # Configura a barra de status
-        self._setup_status_bar()
 
         # Centraliza a janela
         self._center_window()
@@ -109,6 +109,29 @@ class MainWindow(QMainWindow):
         result_layout.addWidget(self.lbl_result)
         parent_layout.addLayout(result_layout)
     
+    def _setup_gold_price_section(self, parent_layout):
+        """Configura a exibição do preço do ouro no fim"""
+        # Busca o preço na inicialização
+        price_text = self.gold_price_cache.fetch_price()
+        
+        # Cria label pequeno com o preço
+        price_layout = QHBoxLayout()
+        price_display_text = self.gold_price_cache.get_price_text()
+        
+        # Só mostra se tiver preço
+        if price_display_text:
+            self.lbl_gold_price = QLabel(price_display_text)
+            
+            # Fonte menor e cinzenta
+            font = QFont()
+            font.setPointSize(8)
+            self.lbl_gold_price.setFont(font)
+            self.lbl_gold_price.setStyleSheet("color: gray;")
+            
+            price_layout.addStretch()
+            price_layout.addWidget(self.lbl_gold_price)
+            parent_layout.addLayout(price_layout)
+    
     def _setup_menu(self):
         """Configura o menu superior"""
         menubar = self.menuBar()
@@ -124,11 +147,6 @@ class MainWindow(QMainWindow):
         exit_action = settings_menu.addAction('Sair')
         exit_action.triggered.connect(self.on_closing)
     
-    def _setup_status_bar(self):
-        """Configura a barra de status"""
-        self.status_label = QLabel('Cotação do Ouro: Carregando...')
-        self.statusBar().addWidget(self.status_label)
-    
     def _center_window(self):
         """Centraliza a janela na tela"""
         screen_geometry = self.screen().availableGeometry()
@@ -139,43 +157,6 @@ class MainWindow(QMainWindow):
         y = (screen_height // 2) - (self.height() // 2)
 
         self.move(x, y)
-    
-    def start_gold_price_updater(self):
-        """Inicia a thread para atualizar a cotação do ouro"""
-        self.gold_price_thread = GoldPriceThread()
-        self.gold_price_thread.price_updated.connect(self.update_status_bar)
-        self.gold_price_thread.start()
-        
-        # Busca inicial
-        self.update_gold_price_immediate()
-    
-    def update_gold_price_immediate(self):
-        """Faz uma busca imediata da cotação"""
-        try:
-            from src.core.gold_price import GoldPriceManager
-            manager = GoldPriceManager()
-            price_data = manager.get_price_brl()
-            
-            if price_data:
-                price = price_data['price_brl']
-                is_default = price_data.get('is_default', False)
-                from_cache = price_data.get('from_cache', False)
-                
-                suffix = ""
-                if is_default:
-                    suffix = " (Padrão)"
-                elif from_cache:
-                    suffix = " (Cache)"
-                
-                self.status_label.setText(f"Cotação do Ouro: R$ {price:.2f}/g (BRL){suffix}")
-            else:
-                self.status_label.setText("Cotação do Ouro: Indisponível")
-        except Exception:
-            self.status_label.setText("Cotação do Ouro: Indisponível")
-    
-    def update_status_bar(self, status_text):
-        """Atualiza o texto da barra de status"""
-        self.status_label.setText(status_text)
     
     def change_metal(self, option):
         """Altera o tipo de metal selecionado"""
@@ -207,13 +188,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Lida com o fechamento da aplicação"""
-        # Para a thread de atualização primeiro
-        if self.gold_price_thread and self.gold_price_thread.isRunning():
-            self.gold_price_thread.stop()
-            # Aguarda no máximo GOLD_THREAD_TIMEOUT para a thread terminar
-            if not self.gold_price_thread.wait(GOLD_THREAD_TIMEOUT):
-                self.gold_price_thread.terminate()
-        
         reply = QMessageBox.question(
             self,
             'Sair',
